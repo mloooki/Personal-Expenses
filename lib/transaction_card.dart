@@ -1,16 +1,20 @@
-import 'models/Transaction.dart';
+/* import 'models/Transaction.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import './edit_transaction_sheet.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class TransactionCard extends StatefulWidget {
-  List<Transaction> _transactionList;
+  final Box _transactionBox;
+  //List<Transaction> _transactionList;
   final Function _deleteTx;
   final Function _addTx;
 
   TransactionCard(
-    @required this._transactionList,
+    //@required this._transactionList,
+    this._transactionBox,
     this._deleteTx,
     this._addTx,
   );
@@ -30,28 +34,13 @@ class TransactionCard extends StatefulWidget {
 class _TransactionCardState extends State<TransactionCard> {
   final Color _cardTextColor = Colors.white;
 
-/*   void _startEditTransaction(BuildContext ctx, Transaction tx) {
-    showBottomSheet(
-        context: ctx,
-        builder: (_) {
-          return EditTransactionSheet(tx, _editTransactionValue);
-        });
-  }
-
-  void _editTransactionValue(Transaction tx) {
-    setState(() {
-      print('Hi editTransactionValue setState() and tx =');
-      print(tx.title);
-      widget._transactionList.removeWhere((element) => element.id == tx.id);
-      widget._transactionList.add(tx);
-    });
-  } */
-
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: widget._transactionList.map((tx) {
-        return Card(
+      children: <Widget>[
+        Expanded(child: ValueListenableBuilder(valueListenable: widget._transactionBox.listenable(), builder: (context,Box transation,_){
+
+                  return Card(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           elevation: 8,
@@ -111,7 +100,11 @@ class _TransactionCardState extends State<TransactionCard> {
             ],
           ),
         );
-      }).toList(),
-    );
+
+        },),)
+
+      ]).toList(),
+    )
   }
 }
+ */

@@ -1,16 +1,25 @@
+import 'dart:io';
+
 import 'package:My_App/add_new_transaction_sheet.dart';
 import 'package:My_App/edit_transaction_sheet.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:async';
 import 'models/Transaction.dart';
-import './transaction_card.dart';
-import './transaction_list.dart';
+//import './transaction_card.dart';
+//import './transaction_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pie_chart/pie_chart.dart';
-//import './sqlite/db_helper.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding
+      .ensureInitialized(); // to ensure we run the DB code before the app start.
+  Directory document = await getApplicationDocumentsDirectory();
+  Hive.init(document.path);
+  await Hive.openBox("transaction");
   runApp(MyApp());
 }
 
@@ -41,8 +50,9 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   //final DBTransactionManager dbmanager = new DBTransactionManager()
+  Box transactionBox;
   final Color _cardTextColor = Colors.white;
-  final List<Transaction> _transactionList = [];
+  //final List<Transaction> _transactionList = [];
 /*     Transaction(DateTime.now().toString(), 'Groceries', 55, DateTime.now(),
         Icon(Icons.local_grocery_store)),
     Transaction(DateTime.now().toString(), 'Bills', 45, DateTime.now(),
@@ -74,22 +84,12 @@ class _MyHomePageState extends State<MyHomePage> {
     Transaction(DateTime.now().toString(), 'Other', 5, DateTime.now(),
         Icon(Icons.monetization_on)), */
   //];
-  //var dbbHelper;
-  //List<Transaction> txss;
-  //bool isUpdating;
-  //@override
-  // void initState() {
-  // super.initState();
-  //   dbbHelper = DBHelper();
-  //  dbbHelper.getTransactions();
-  //  isUpdating = false;
-  // }
 
-  //refreshList() {
+  // refreshList() {
   // setState(() {
-  //  txss = dbbHelper.getTransactions();
+  // _transactionList = dbbHelper.getTransactions();
   // });
-  // }
+  //}
 
   Map<String, double> getTransactionmap(List<Transaction> txs) {
     //maybe I can conver this method to get type.
@@ -133,6 +133,12 @@ class _MyHomePageState extends State<MyHomePage> {
     return dataMap2;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    transactionBox = Hive.box('transaction');
+  }
+
   int getTotal(List<Transaction> txs) {
     //get the total of all Transactions.
     double total = 0;
@@ -159,9 +165,29 @@ class _MyHomePageState extends State<MyHomePage> {
     print('Hi delete me please my id is : $id');
 
     setState(() {
-      _transactionList.removeWhere((element) => element.id == id);
-      //dbbHelper.delete(id);
+      //_transactionList.removeWhere((element) => element.id == id);
+      transactionBox.delete(id);
     });
+  }
+
+  List getTransactionsList() {
+    List<Transaction> transaction = [];
+    for (int i = 0; i < transactionBox.length; i++) {
+      final key = transactionBox.keys.toList()[i];
+      final value = transactionBox.get(key);
+      final tx = Transaction(
+          key, value[0], value[1], value[2], _getCorrectIcon(value[0]));
+      transaction.add(tx);
+    }
+    return transaction;
+  }
+
+  Transaction _getOneTransaction(String id) {
+    final values = transactionBox.get(id);
+    print(values);
+    final Transaction x = Transaction(
+        id, values[0], values[1], values[2], _getCorrectIcon(values[0]));
+    return x;
   }
 
   void _addNewTransaction(String title, double amount, DateTime chosenDate) {
@@ -172,53 +198,36 @@ class _MyHomePageState extends State<MyHomePage> {
       chosenDate,
       _getCorrectIcon(title),
     );
-
+    final key = newTx.id;
     setState(() {
-      _transactionList.add(newTx);
-      //dbbHelper.save(newTx);
+      //_transactionList.add(newTx);
+      transactionBox.put(key, [newTx.title, newTx.amount, newTx.date]);
+
+      print("New Transaction Added:");
+      print(transactionBox.get(key));
+      //print(transactionBox.getAt(0));
     });
   }
 
-  void _startEditTransaction(BuildContext ctx, Transaction tx) {
-    showBottomSheet(
+  void _startEditTransaction(BuildContext ctx, String id) {
+    final Transaction x = _getOneTransaction(id);
+    showModalBottomSheet(
         context: ctx,
         builder: (_) {
           return EditTransactionSheet(
-              tx, _editTransactionValue, _addNewTransaction);
+              x, _deleteTransaction, _addNewTransaction);
         });
   }
-
-  void _editTransactionValue(Transaction tx) {
-    print('start = ' + tx.title + tx.date.toString() + tx.amount.toString());
-    setState(() {
-      _deleteTransaction(tx.id);
-    });
-  }
-
-/*   void _editTransaction(Transaction editedTransaction) {
-    print("hi i'm here :)");
-    _transactionList
-        .removeWhere((element) => element.id == editedTransaction.id);
-    setState(() {
-      _transactionList.add(editedTransaction);
-    });
-  } */
 
   void _startAddNreTransaction(BuildContext ctx) {
     showModalBottomSheet(
         context: ctx,
         builder: (_) {
-          return AddNewTransactionSheet(_addNewTransaction);
+          return AddNewTransactionSheet(
+            _addNewTransaction,
+          );
         });
   }
-
-/*   void _startEditTransaction(BuildContext ctx) {
-    showBottomSheet(
-        context: ctx,
-        builder: (_) {
-          return EditTransaction(_editTransaction);
-        });
-  } */
 
   @override
   Widget build(BuildContext context) {
@@ -237,13 +246,13 @@ class _MyHomePageState extends State<MyHomePage> {
                 0.35,
             margin: EdgeInsets.fromLTRB(0, 10, 0, 20),
             child: PieChart(
-              dataMap: getTransactionmap(_transactionList),
+              dataMap: getTransactionmap(getTransactionsList()),
               animationDuration: Duration(seconds: 1),
               chartType: ChartType.ring,
               ringStrokeWidth: 11,
               chartLegendSpacing: 20,
               centerText:
-                  'TOTAL=' + getTotal(_transactionList).toString() + '\$',
+                  'TOTAL=' + getTotal(getTransactionsList()).toString() + '\$',
               legendOptions: LegendOptions(
                   showLegendsInRow: false,
                   legendPosition: LegendPosition.right),
@@ -253,7 +262,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           ),
-          _transactionList.isEmpty
+          getTransactionsList().isEmpty
               ? Container(
                   margin: EdgeInsets.all(55),
                   child: Text(
@@ -268,17 +277,101 @@ class _MyHomePageState extends State<MyHomePage> {
                   height: (mediaQuery.size.height -
                           appBar.preferredSize.height -
                           mediaQuery.padding.top) *
-                      0.58,
+                      0.59,
                   //margin: EdgeInsets.fromLTRB(10, 10, 10, 0),
                   //decoration: BoxDecoration(border: Border.all(color: Colors.black)),
 
-                  child: SingleChildScrollView(
-                    child: TransactionCard(
-                      _transactionList,
-                      _deleteTransaction,
-                      _addNewTransaction,
-                    ),
-                  )),
+                  child: ValueListenableBuilder(
+                    valueListenable: transactionBox.listenable(),
+                    builder: (context, Box transation, _) {
+                      return ListView.separated(
+                        reverse: true,
+                        itemBuilder: (context, index) {
+                          final key = transation.keys.toList()[index];
+                          final value = transation.get(key);
+                          //print(value);
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Card(
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
+                                elevation: 8,
+                                margin: EdgeInsets.fromLTRB(8, 8, 8, 10),
+                                color: Theme.of(context).primaryColor,
+                                child: Row(
+                                  children: <Widget>[
+                                    Container(
+                                      margin:
+                                          EdgeInsets.fromLTRB(20, 10, 10, 17),
+                                      width: constraints.maxWidth * .25,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Icon(
+                                            _getCorrectIcon(value[0]).icon,
+                                            color: _cardTextColor,
+                                            size: 40,
+                                          ),
+                                          Text(
+                                            value[0],
+                                            style: TextStyle(
+                                                color: _cardTextColor,
+                                                fontWeight: FontWeight.w600),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Container(
+                                          width: constraints.maxWidth * 0.25,
+                                          child: Text(
+                                            '\$' + value[1].toStringAsFixed(2),
+                                            style: TextStyle(
+                                                color: _cardTextColor,
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        Text(
+                                          DateFormat.yMMMd().format(value[2]),
+                                          style:
+                                              TextStyle(color: _cardTextColor),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(
+                                      width: constraints.maxWidth * 0.05,
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.edit),
+                                      color: _cardTextColor,
+                                      onPressed: () =>
+                                          _startEditTransaction(context, key),
+                                    ),
+                                    SizedBox(
+                                      width: constraints.maxWidth * 0.05,
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.delete),
+                                      color: Colors.redAccent,
+                                      onPressed: () => _deleteTransaction(key),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        separatorBuilder: (_, index) => Divider(),
+                        itemCount: transation.keys.toList().length,
+                      );
+                    },
+                  ),
+                ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
